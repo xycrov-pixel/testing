@@ -232,7 +232,7 @@ document.getElementById('submitBtn').addEventListener('click', async ()=>{
   // Try to send to backend if API_BASE is set; otherwise fallback to localStorage
   if(API_BASE && API_BASE.length){
     try {
-      const resp = await fetch(`${API_BASE.replace(/\\/$/,'')}/api/addResult`, {
+      const resp = await fetch(`${API_BASE.replace(/\/$/,'')}/api/addResult`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ coworker: chosen.name })
@@ -310,7 +310,7 @@ async function showStatsPage(){
   let stats;
   if(API_BASE && API_BASE.length){
     try {
-      const res = await fetch(`${API_BASE.replace(/\\/$/,'')}/api/stats`);
+      const res = await fetch(`${API_BASE.replace(/\/$/,'')}/api/stats`);
       const json = await res.json();
       if(json.ok && json.stats) stats = json.stats;
       else stats = readLocalStats();
@@ -354,7 +354,7 @@ resetStatsBtn.addEventListener('click', async ()=>{
     try {
       // prompt for admin key or use empty to fail
       const adminKey = prompt('Enter admin key to reset server stats (provided when deploying backend):');
-      const res = await fetch(`${API_BASE.replace(/\\/$/,'')}/api/reset`, {
+      const res = await fetch(`${API_BASE.replace(/\/$/,'')}/api/reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
         body: JSON.stringify({ key: adminKey })
