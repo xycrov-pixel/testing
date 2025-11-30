@@ -135,13 +135,13 @@ const COWORKER_RULES = {
   Jade: { 1:["B"], 2:["B"], 3:["A"], 4:["B"], 5:["C"], 6:["C"], 7:["B"], 8:["B"], 9:["A","B","C"], 10:["B"] },
   Charlie: { 1:["A"], 2:["B"], 3:["A"], 4:["A"], 5:["A"], 6:["D"], 7:["B"], 8:["A"], 9:["A","B","D"], 10:["A"] },
   Rhys: { 1:["B"], 2:["B"], 3:["B"], 4:["A"], 5:["C"], 6:["C"], 7:["C"], 8:["B"], 9:["A","C","D"], 10:["A"] },
-  Cheri: { 1:["B"], 2:["B"], 3:["A"], 4:["A"], 5:["D"], 6:["A"], 7:["B"], 8:["B"], 9:["A","B","C"], 10:["C"] },
+  Cherry: { 1:["B"], 2:["B"], 3:["A"], 4:["A"], 5:["D"], 6:["A"], 7:["B"], 8:["B"], 9:["A","B","C"], 10:["C"] },
   Tun: { 1:["A"], 2:["B"], 3:["D"], 4:["A"], 5:["C"], 6:["B"], 7:["B"], 8:["A"], 9:["A","B","D"], 10:["B"] },
   Hannah: { 1:["B"], 2:["B"], 3:["E"], 4:["A"], 5:["A"], 6:["B"], 7:["A"], 8:["C"], 9:["B","C","D"], 10:["A"] }
 };
 
 /* localStorage fallback for stats */
-const DEFAULT_STATS = { Mateo:0, Romeo:0, Simon:0, Eddie:0, Jade:0, Charlie:0, Rhys:0, Cheri:0, Tun:0, Hannah:0 };
+const DEFAULT_STATS = { Mateo:0, Romeo:0, Simon:0, Eddie:0, Jade:0, Charlie:0, Rhys:0, Cherry:0, Tun:0, Hannah:0 };
 if(!localStorage.getItem('coworkerStats')) localStorage.setItem('coworkerStats', JSON.stringify(DEFAULT_STATS));
 function readLocalStats(){ return JSON.parse(localStorage.getItem('coworkerStats') || JSON.stringify(DEFAULT_STATS)); }
 function writeLocalStats(obj){ localStorage.setItem('coworkerStats', JSON.stringify(obj)); }
