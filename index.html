@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Which Coworker Is Your Type?</title>
+<style>
+  /* same styling as before (kept concise for readability) */
+  :root{--card-bg:#fff;--accent:#0b72f0}
+  body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:#f5f7fb; margin:0; padding:28px; color:#111}
+  .site{max-width:980px;margin:0 auto;position:relative}
+  .card{background:var(--card-bg); border-radius:12px; padding:20px; box-shadow:0 6px 20px rgba(20,30,60,0.08); margin-bottom:18px}
+  header{display:flex;align-items:center;justify-content:space-between}
+  h1{margin:0;font-size:20px}
+  p.lead{color:#556; margin-top:8px;margin-bottom:16px}
+  .questions{display:block}
+  .question{border:1px solid #e6e9ef;padding:14px;border-radius:10px;margin-bottom:12px}
+  .q-title{font-weight:600;margin-bottom:8px}
+  .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+  label.opt{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+  label.opt input{transform:scale(1.05)}
+  label.opt:hover{background:#fbfcff;border-color:#eef3ff}
+  .controls{display:flex;gap:8px;margin-top:12px}
+  button.btn{background:var(--accent);color:#fff;border:0;padding:10px 14px;border-radius:8px;cursor:pointer}
+  button.btn.secondary{background:#eef2ff;color:var(--accent);border:1px solid #dbe8ff}
+  #result{display:none;margin-top:14px;padding:12px;border-radius:10px;background:#f0fff4;border:1px solid #d5f5d9}
+  .admin-icon{position:fixed;right:24px;top:24px;cursor:pointer;font-size:20px;background:#fff;padding:10px;border-radius:10px;box-shadow:0 6px 20px rgba(20,30,60,0.08)}
+  .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);align-items:center;justify-content:center;z-index:60}
+  .modal{background:#fff;padding:18px;border-radius:10px;width:320px;box-shadow:0 10px 30px rgba(10,20,40,0.15)}
+  .modal h3{margin:0 0 10px 0}
+  input[type="text"], input[type="password"]{width:100%;padding:8px;border-radius:6px;border:1px solid #d6dbe6;margin-bottom:8px}
+  .stats-page{display:none}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:12px}
+  .stat-card{background:#fafafa;padding:12px;border-radius:8px;border:1px solid #eee}
+  .stat-card b{display:block;font-size:18px}
+  .small{font-size:13px;color:#556}
+  .footer-note{font-size:13px;color:#667;margin-top:10px}
+  .reset-stats{background:#fff;color:#d00;border:1px solid #f2c6c6}
+  @media (max-width:600px){ .modal{width:92%} }
+</style>
+</head>
+<body>
+  <div class="site">
+    <div class="card">
+      <header>
+        <div>
+          <h1>Which Coworker Would Be Your Ideal Type?</h1>
+          <p class="lead">Answer the quick quiz and we'll match you to a coworker (based on the rules you supplied).</p>
+        </div>
+        <div style="text-align:right;color:#666;font-size:13px">Live stats: backend-enabled mode available</div>
+      </header>
+
+      <div id="quizArea">
+        <form id="quizForm" class="questions" onsubmit="return false;"></form>
+
+        <div class="controls">
+          <button class="btn" id="submitBtn">Get match</button>
+          <button class="btn secondary" id="resetBtn" type="button">Reset answers</button>
+        </div>
+
+        <div id="result" class="card" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <!-- Stats page (admin only) -->
+    <div id="statsContainer" class="card stats-page">
+      <header style="align-items:flex-start;gap:12px;">
+        <div>
+          <h2 style="margin:0">Match statistics</h2>
+          <div class="small">Counts are fetched from the backend. If no backend configured, falls back to localStorage.</div>
+        </div>
+        <div style="margin-left:auto">
+          <button id="resetStatsBtn" class="btn reset-stats">Reset counters</button>
+        </div>
+      </header>
+
+      <div class="stats-grid" id="statsGrid" style="margin-top:12px"></div>
+
+      <canvas id="statsChart" width="800" height="320" style="margin-top:18px"></canvas>
+      <div class="footer-note">Only admins (via the top-right lock icon) can view this page.</div>
+    </div>
+  </div>
+
+  <!-- Admin icon -->
+  <div class="admin-icon" id="adminIcon" title="Admin login">🔒</div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h3 id="modalTitle">Admin login</h3>
+      <input id="adminUser" placeholder="Username" type="text" autocomplete="username" />
+      <input id="adminPass" placeholder="Password" type="password" autocomplete="current-password" />
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn" id="loginBtn">Login</button>
+        <button class="btn secondary" id="modalCancel">Cancel</button>
+      </div>
+      <div id="loginHint" class="small" style="margin-top:10px;color:#666">Default demo credentials: <b>admin</b> / <b>password123</b></div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+/* ============
+   FRONTEND CONFIG
+   ============ */
+
+/*
+  Set API_BASE to your deployed backend URL, for example:
+    const API_BASE = 'https://coworker-api.onrender.com'
+  If left empty (''), the page will use localStorage-only mode.
+*/
+const API_BASE = 'https://testing-again-nn8a.onrender.com'; // <-- PUT your backend URL here after deploying (no trailing slash)
+
+/* ============
+   QUESTIONS + RULES (same as before)
+   ============ */
+const QUESTIONS = [
+  { id: 1, q: "Which dish do you prefer?", opts: [{c:"A", t:"Pizza"}, {c:"B", t:"Pasta"}] },
+  { id: 2, q: "Who works harder? (Kitchen or Floor)", opts: [{c:"A", t:"Kitchen"}, {c:"B", t:"Floor"}] },
+  { id: 3, q: "Favourite Alcohol?", opts: [{c:"A", t:"Vodka"}, {c:"B", t:"Rum"}, {c:"C", t:"Gin"}, {c:"D", t:"Tequila"}, {c:"E", t:"Wine"}] },
+  { id: 4, q: "Do you have a big party life?", opts: [{c:"A", t:"Yes"}, {c:"B", t:"No"}] },
+  { id: 5, q: "Favourite type of music", opts: [{c:"A", t:"R&B"}, {c:"B", t:"Rock"}, {c:"C", t:"Indie"}, {c:"D", t:"Hip-Hop"}, {c:"E", t:"Rap"}] },
+  { id: 6, q: "Where would you go for your first date?", opts: [{c:"A", t:"Food"}, {c:"B", t:"Movies"}, {c:"C", t:"Bowling"}, {c:"D", t:"Clubbing"}] },
+  { id: 7, q: "Are you more introverted or extroverted?", opts: [{c:"A", t:"Introverted"}, {c:"B", t:"Extroverted"}, {c:"C", t:"Somewhere in Between"}] },
+  { id: 8, q: "What's your type more based on?", opts: [{c:"A", t:"Looks"}, {c:"B", t:"Personality"}, {c:"C", t:"Vibe"}, {c:"D", t:"Shared Interests"}] },
+  { id: 9, q: "Biggest ick?", opts: [{c:"A", t:"Dry texter"}, {c:"B", t:"Bad attitude"}, {c:"C", t:"Ugly"}, {c:"D", t:"Talks too much"}] },
+  { id: 10, q: "What pet do you prefer?", opts: [{c:"A", t:"Cats"}, {c:"B", t:"Dogs"}, {c:"C", t:"Something else"}, {c:"D", t:"None"}] }
+];
+
+const COWORKER_RULES = {
+  Mateo: { 1:["A"], 2:["A"], 3:["D"], 4:["B"], 5:["D"], 7:["B"], 6:["A"], 9:["A","C"], 10:["D"] },
+  Romeo: { 1:["B"], 2:["A"], 3:["E"], 4:["B"], 5:["D"], 6:["A"], 7:["C"], 8:["C"], 9:["B","C","D"], 10:["D"] },
+  Simon: { 1:["B"], 2:["B"], 4:["B"], 5:["A"], 7:["B"], 6:["D"], 3:["C"], 8:["B"], 9:["A","B","D"], 10:["D"] },
+  Eddie: { 1:["A"], 2:["B"], 3:["D"], 4:["B"], 5:["D"], 6:["A"], 7:["B"], 8:["D"], 9:["A","B","D"], 10:["D"] },
+  Jade: { 1:["B"], 2:["B"], 3:["A"], 4:["B"], 5:["C"], 6:["C"], 7:["B"], 8:["B"], 9:["A","B","C"], 10:["B"] },
+  Charlie: { 1:["A"], 2:["B"], 3:["A"], 4:["A"], 5:["A"], 6:["D"], 7:["B"], 8:["A"], 9:["A","B","D"], 10:["A"] },
+  Rhys: { 1:["B"], 2:["B"], 3:["B"], 4:["A"], 5:["C"], 6:["C"], 7:["C"], 8:["B"], 9:["A","C","D"], 10:["A"] },
+  Cheri: { 1:["B"], 2:["B"], 3:["A"], 4:["A"], 5:["D"], 6:["A"], 7:["B"], 8:["B"], 9:["A","B","C"], 10:["C"] },
+  Tun: { 1:["A"], 2:["B"], 3:["D"], 4:["A"], 5:["C"], 6:["B"], 7:["B"], 8:["A"], 9:["A","B","D"], 10:["B"] },
+  Hannah: { 1:["B"], 2:["B"], 3:["E"], 4:["A"], 5:["A"], 6:["B"], 7:["A"], 8:["C"], 9:["B","C","D"], 10:["A"] }
+};
+
+/* localStorage fallback for stats */
+const DEFAULT_STATS = { Mateo:0, Romeo:0, Simon:0, Eddie:0, Jade:0, Charlie:0, Rhys:0, Cheri:0, Tun:0, Hannah:0 };
+if(!localStorage.getItem('coworkerStats')) localStorage.setItem('coworkerStats', JSON.stringify(DEFAULT_STATS));
+function readLocalStats(){ return JSON.parse(localStorage.getItem('coworkerStats') || JSON.stringify(DEFAULT_STATS)); }
+function writeLocalStats(obj){ localStorage.setItem('coworkerStats', JSON.stringify(obj)); }
+
+/* ---------- Build form ---------- */
+const form = document.getElementById('quizForm');
+QUESTIONS.forEach(q=>{
+  const container = document.createElement('div'); container.className='question';
+  const title = document.createElement('div'); title.className='q-title'; title.textContent = `${q.id}. ${q.q}`;
+  container.appendChild(title);
+  const optsWrap = document.createElement('div'); optsWrap.className='opts';
+  q.opts.forEach(opt=>{
+    const lab = document.createElement('label'); lab.className='opt';
+    const radio = document.createElement('input');
+    radio.type='radio'; radio.name = `q${q.id}`; radio.value = opt.c;
+    const span = document.createElement('span'); span.textContent = `${opt.t}`;
+    lab.appendChild(radio); lab.appendChild(span);
+    optsWrap.appendChild(lab);
+  });
+  container.appendChild(optsWrap);
+  form.appendChild(container);
+});
+
+/* ---------- Matching logic (same as earlier) ---------- */
+function computeMatches(answers){
+  const results = [];
+  for(const name in COWORKER_RULES){
+    const rules = COWORKER_RULES[name];
+    const ruleQids = Object.keys(rules).map(x=>parseInt(x,10));
+    let matched = 0, total = 0, matchedQuestions = [];
+    ruleQids.forEach(qid=>{
+      const accepted = rules[qid] || [];
+      if(Array.isArray(accepted) && accepted.length>0){
+        total++;
+        if(answers[qid] && accepted.includes(answers[qid])){
+          matched++;
+          matchedQuestions.push(qid);
+        }
+      }
+    });
+    const percent = total>0 ? matched/total : 0;
+    results.push({ name, matched, total, percent, matchedQuestions });
+  }
+  return results;
+}
+
+function pickMatch(answers){
+  const matches = computeMatches(answers);
+  const qualified = matches.filter(m=>m.total>0 && m.percent >= 0.8);
+  if(qualified.length===1) return { chosen: qualified[0], matches };
+  if(qualified.length>1){
+    const pick = qualified[Math.floor(Math.random()*qualified.length)];
+    return { chosen: pick, matches };
+  }
+  let max = -1;
+  matches.forEach(m=>{ if(m.total>0 && m.percent>max) max = m.percent; });
+  const top = matches.filter(m=>m.total>0 && m.percent === max);
+  if(top.length>0){
+    const pick = top[Math.floor(Math.random()*top.length)];
+    return { chosen: pick, matches };
+  }
+  const allNames = matches.map(m=>m.name);
+  const rnd = allNames[Math.floor(Math.random()*allNames.length)];
+  const fallback = matches.find(m=>m.name===rnd);
+  return { chosen: fallback, matches };
+}
+
+/* ---------- UI handlers ---------- */
+const resultBox = document.getElementById('result');
+document.getElementById('submitBtn').addEventListener('click', async ()=>{
+  const answers = {};
+  QUESTIONS.forEach(q=>{
+    const el = document.querySelector(`input[name='q${q.id}']:checked`);
+    if(el) answers[q.id] = el.value;
+  });
+  if(Object.keys(answers).length < 4){
+    alert('Please answer at least 4 questions.');
+    return;
+  }
+
+  const { chosen, matches } = pickMatch(answers);
+  if(!chosen){
+    resultBox.style.display='block';
+    resultBox.innerHTML = `<h3>No match found</h3><p>Unable to determine a match.</p>`;
+    return;
+  }
+
+  // Try to send to backend if API_BASE is set; otherwise fallback to localStorage
+  if(API_BASE && API_BASE.length){
+    try {
+      const resp = await fetch(`${API_BASE.replace(/\/$/,'')}/api/addResult`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coworker: chosen.name })
+      });
+      const json = await resp.json();
+      if(!json.ok){
+        console.warn('Server returned error, falling back to localStorage', json);
+        // fallback
+        const local = readLocalStats(); local[chosen.name] = (local[chosen.name]||0) + 1; writeLocalStats(local);
+      }
+    } catch (err) {
+      console.warn('Error posting to backend, falling back to localStorage', err);
+      const local = readLocalStats(); local[chosen.name] = (local[chosen.name]||0) + 1; writeLocalStats(local);
+    }
+  } else {
+    // no API configured -> local only
+    const local = readLocalStats(); local[chosen.name] = (local[chosen.name]||0) + 1; writeLocalStats(local);
+  }
+
+  // show result (no matched-criteria list)
+resultBox.style.display = 'block';
+resultBox.innerHTML = `
+  <h3>Your match: <strong>${chosen.name}</strong></h3>
+  <div class="small">
+    Matched ${chosen.matched}/${chosen.total} listed traits 
+    (${Math.round(chosen.percent * 100)}%).
+  </div>
+`;
+
+});
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  document.querySelectorAll('input[type=radio]').forEach(r=>r.checked=false);
+  resultBox.style.display='none';
+  resultBox.innerHTML='';
+});
+
+/* ---------- Admin & Stats UI ---------- */
+const adminIcon = document.getElementById('adminIcon');
+const modalBackdrop = document.getElementById('modalBackdrop');
+const modalCancel = document.getElementById('modalCancel') || document.getElementById('modalCancel');
+const loginBtn = document.getElementById('loginBtn');
+const statsContainer = document.getElementById('statsContainer');
+const statsGrid = document.getElementById('statsGrid');
+const statsChartCanvas = document.getElementById('statsChart');
+const resetStatsBtn = document.getElementById('resetStatsBtn');
+
+adminIcon.addEventListener('click', ()=>{ modalBackdrop.style.display='flex'; });
+document.getElementById('modalCancel').addEventListener('click', ()=>{ modalBackdrop.style.display='none'; });
+
+// demo credentials (change if you want)
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'password123';
+
+loginBtn.addEventListener('click', async ()=>{
+  const u = document.getElementById('adminUser').value;
+  const p = document.getElementById('adminPass').value;
+  if(u === ADMIN_USER && p === ADMIN_PASS){
+    modalBackdrop.style.display='none';
+    await showStatsPage();
+  } else {
+    alert('Incorrect credentials.');
+  }
+});
+
+async function showStatsPage(){
+  // fetch stats from backend if configured, else local
+  let stats;
+  if(API_BASE && API_BASE.length){
+    try {
+      const res = await fetch(`${API_BASE.replace(/\/$/,'')}/api/stats`);
+      const json = await res.json();
+      if(json.ok && json.stats) stats = json.stats;
+      else stats = readLocalStats();
+    } catch(err){
+      console.warn('Failed to fetch stats from backend, using localStorage', err);
+      stats = readLocalStats();
+    }
+  } else {
+    stats = readLocalStats();
+  }
+
+  // render grid
+  statsGrid.innerHTML = '';
+  Object.keys(stats).forEach(name=>{
+    const card = document.createElement('div'); card.className='stat-card';
+    card.innerHTML = `<div class="small">${name}</div><b>${stats[name]}</b>`;
+    statsGrid.appendChild(card);
+  });
+
+  statsContainer.style.display = 'block';
+  drawChart(stats);
+  statsContainer.scrollIntoView({behavior:'smooth'});
+}
+
+let chartInstance = null;
+function drawChart(stats){
+  const labels = Object.keys(stats);
+  const data = Object.values(stats);
+  if(chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(statsChartCanvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Matches', data }] },
+    options: { responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } }
+  });
+}
+
+resetStatsBtn.addEventListener('click', async ()=>{
+  if(!confirm('Reset all stored match counters?')) return;
+  // if API available, call reset endpoint (needs ADMIN_KEY set on backend)
+  if(API_BASE && API_BASE.length){
+    try {
+      // prompt for admin key or use empty to fail
+      const adminKey = prompt('Enter admin key to reset server stats (provided when deploying backend):');
+      const res = await fetch(`${API_BASE.replace(/\/$/,'')}/api/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ key: adminKey })
+      });
+      const json = await res.json();
+      if(json.ok && json.stats){
+        alert('Server stats reset.');
+        showStatsPage();
+        return;
+      } else {
+        alert('Server reset failed (wrong key or server error). Falling back to local reset.');
+      }
+    } catch(err){
+      console.warn('Server reset failed', err);
+      alert('Server reset failed. Falling back to local reset.');
+    }
+  }
+  // local fallback
+  writeLocalStats(DEFAULT_STATS);
+  showStatsPage();
+});
+</script>
+</body>
+</html>
